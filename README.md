@@ -1,6 +1,6 @@
 # 🎓 Smart College AI Assistant
 
-Smart College AI Assistant is a premium, AI-powered study workspace that converts flat study notes, slides, and PDFs into fully interactive, personalized learning environments. 
+Smart College AI Assistant is a great, AI-powered study workspace that converts flat study notes, slides, and PDFs into fully interactive, personalized learning environments. 
 
 Rather than scrolling through pages of lectures, students upload documents into a single consolidated dashboard to unlock grounded Q&A chat, audio-enabled 3D flashcards, and automated self-test quizzes.
 
