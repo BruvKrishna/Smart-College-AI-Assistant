@@ -26,8 +26,24 @@ const Components = {
    */
   renderDashboard: function(state, app) {
     const totalDocs = state.documents.length;
-    const totalQueries = state.documents.reduce((acc, doc) => acc + (doc.chatHistory ? doc.chatHistory.length - 1 : 0), 0);
-    const totalFlashcards = state.documents.reduce((acc, doc) => acc + (doc.flashcards ? doc.flashcards.length : 0), 0);
+    
+    // Dynamically fetch student metrics from localStorage
+    const doubtsSolved = parseInt(localStorage.getItem('smart_college_doubts_solved') || '0', 10);
+    
+    const reviewedFC = JSON.parse(localStorage.getItem('smart_college_reviewed_flashcards') || '[]');
+    const totalFlashcards = reviewedFC.length;
+    let quizScores = [];
+    try {
+      quizScores = JSON.parse(localStorage.getItem('smart_college_quiz_scores'));
+      if (!Array.isArray(quizScores)) {
+        quizScores = [];
+      }
+    } catch(e) {
+      quizScores = [];
+    }
+    const avgQuizScore = quizScores.length > 0 
+      ? Math.round(quizScores.reduce((a, b) => a + b, 0) / quizScores.length) + '%' 
+      : '0%';
     
     // Quick statistics calculation
     const html = `
@@ -47,7 +63,7 @@ const Components = {
         <div class="card stat-card">
           <div class="stat-icon">${Icons.chat}</div>
           <div class="stat-info">
-            <span class="stat-value">${totalQueries}</span>
+            <span class="stat-value">${doubtsSolved}</span>
             <span class="stat-label">Doubts Solved</span>
           </div>
         </div>
@@ -61,7 +77,7 @@ const Components = {
         <div class="card stat-card">
           <div class="stat-icon">${Icons.quiz}</div>
           <div class="stat-info">
-            <span class="stat-value">85%</span>
+            <span class="stat-value">${avgQuizScore}</span>
             <span class="stat-label">Average Quiz Score</span>
           </div>
         </div>
@@ -191,6 +207,8 @@ const Components = {
         app.confirmDeleteDocument(id);
       });
     });
+
+
 
     return element;
   },
@@ -489,7 +507,10 @@ const Components = {
     composer.innerHTML = `
       <div class="composer-input-container">
         <textarea class="chat-input" placeholder="Ask a doubt about '${doc.name}'..." id="chat-textarea-input" rows="1"></textarea>
-        <div class="composer-actions">
+        <div class="composer-actions" style="display: flex; gap: 8px; align-items: center;">
+          <button class="btn btn-secondary btn-icon" id="chat-mic-btn" style="border-radius: 50%; width: 36px; height: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); cursor: pointer; border: 1px solid var(--border-color); background: transparent;" title="Voice doubt query">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+          </button>
           <button class="btn btn-primary btn-icon" id="chat-send-btn" style="border-radius: 50%; width: 36px; height: 36px; padding: 0;">
             ${Icons.send}
           </button>
@@ -500,6 +521,7 @@ const Components = {
     // Composer action triggers
     const textarea = composer.querySelector('#chat-textarea-input');
     const sendBtn = composer.querySelector('#chat-send-btn');
+    const micBtn = composer.querySelector('#chat-mic-btn');
 
     const handleSend = () => {
       const text = textarea.value.trim();
@@ -518,6 +540,77 @@ const Components = {
     });
 
     sendBtn.addEventListener('click', handleSend);
+
+    // Voice recognition handlers
+    let recognition = null;
+    let isListening = false;
+
+    if (micBtn) {
+      micBtn.addEventListener('click', () => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+          app.showToast("Voice recognition is not supported in this browser. Please use Chrome/Edge.", "error");
+          return;
+        }
+
+        if (isListening) {
+          if (recognition) recognition.stop();
+          return;
+        }
+
+        try {
+          recognition = new SpeechRecognition();
+          recognition.lang = 'en-US';
+          recognition.interimResults = false;
+          recognition.maxAlternatives = 1;
+
+          recognition.onstart = () => {
+            isListening = true;
+            micBtn.classList.add('mic-listening');
+            micBtn.title = "Listening... Click to stop";
+            app.showToast("Listening... Speak your doubt now.", "info");
+          };
+
+          recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            if (transcript && transcript.trim()) {
+              textarea.value = transcript;
+              app.showToast(`Recognized: "${transcript}"`, "success");
+              // Auto-submit after 600ms to allow visual confirmation
+              setTimeout(() => {
+                handleSend();
+              }, 600);
+            }
+          };
+
+          recognition.onerror = (event) => {
+            console.error("Speech Recognition Error:", event.error);
+            if (event.error === 'not-allowed') {
+              app.showToast("Microphone permission denied. Enable it in browser settings.", "error");
+            } else {
+              app.showToast("Speech recognition failed. Try speaking again.", "error");
+            }
+            cleanupMic();
+          };
+
+          recognition.onend = () => {
+            cleanupMic();
+          };
+
+          const cleanupMic = () => {
+            isListening = false;
+            micBtn.classList.remove('mic-listening');
+            micBtn.title = "Voice doubt query";
+          };
+
+          recognition.start();
+
+        } catch (e) {
+          console.error("Failed to initialize Speech Recognition:", e);
+          app.showToast("Could not start speech recognition.", "error");
+        }
+      });
+    }
 
     chatPanel.appendChild(composer);
     wrapper.appendChild(chatPanel);
@@ -683,6 +776,16 @@ const Components = {
     }
 
     const currentCard = cards[currentIndex];
+
+    // Mark card as reviewed in localStorage
+    if (currentCard && currentCard.question) {
+      const reviewed = JSON.parse(localStorage.getItem('smart_college_reviewed_flashcards') || '[]');
+      if (!reviewed.includes(currentCard.question)) {
+        reviewed.push(currentCard.question);
+        localStorage.setItem('smart_college_reviewed_flashcards', JSON.stringify(reviewed));
+      }
+    }
+
     const progressPercent = Math.round((currentIndex / totalCards) * 100);
 
     const container = document.createElement('div');

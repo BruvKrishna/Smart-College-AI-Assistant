@@ -458,7 +458,7 @@ class DualModeAIService(BaseAIService):
             res_data = json.loads(response.read().decode("utf-8"))
             return res_data["choices"][0]["message"]["content"].strip()
 
-    def generate_chat_answer(self, doc_name: str, doc_chunks: List[Dict[str, Any]], question: str) -> Dict[str, Any]:
+    def generate_chat_answer(self, doc_name: str, doc_chunks: List[Dict[str, Any]], question: str, client_gemini_key: str = None, client_groq_key: str = None) -> Dict[str, Any]:
         settings = db.get_settings()
         active_model = settings.get("model", "local")
         
@@ -468,8 +468,8 @@ class DualModeAIService(BaseAIService):
         if active_model == "local" or active_model == "local-heuristic":
             return self.local_service.generate_chat_answer(doc_name, doc_chunks, question)
 
-        gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        groq_key = os.getenv("GROQ_API_KEY")
+        gemini_key = client_gemini_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        groq_key = client_groq_key or os.getenv("GROQ_API_KEY")
 
         if active_model == "gemini":
             if not gemini_key:

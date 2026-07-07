@@ -39,6 +39,17 @@ class SmartCollegeApp {
   }
 
   init() {
+    // Initialize workspace stats to zero/empty on first load
+    if (localStorage.getItem('smart_college_doubts_solved') === null) {
+      localStorage.setItem('smart_college_doubts_solved', '0');
+    }
+    if (localStorage.getItem('smart_college_reviewed_flashcards') === null) {
+      localStorage.setItem('smart_college_reviewed_flashcards', '[]');
+    }
+    if (localStorage.getItem('smart_college_quiz_scores') === null) {
+      localStorage.setItem('smart_college_quiz_scores', '[]');
+    }
+
     // Nav links binding
     document.querySelectorAll('[data-route]').forEach(link => {
       link.addEventListener('click', (e) => {
@@ -490,6 +501,9 @@ class SmartCollegeApp {
       system_prompt: 'You are a helpful college AI assistant. Ground your answers in the student\'s study notes.'
     };
 
+    const geminiKey = localStorage.getItem('smart_college_gemini_key') || '';
+    const groqKey = localStorage.getItem('smart_college_groq_key') || '';
+
     modal.innerHTML = `
       <div class="modal-card" style="max-width: 500px; width: 90%;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
@@ -517,6 +531,16 @@ class SmartCollegeApp {
               <option value="gemini" ${settings.model === 'gemini' ? 'selected' : ''}>Google Gemini API (Cloud)</option>
               <option value="groq" ${settings.model === 'groq' ? 'selected' : ''}>Groq API (Cloud)</option>
             </select>
+          </div>
+          
+          <div class="form-group" style="display:flex; flex-direction:column; gap:4px;">
+            <label style="font-size:12px; color:var(--text-secondary); font-weight:600;">Google Gemini API Key (Optional)</label>
+            <input type="password" id="settings-gemini-key" value="${geminiKey}" placeholder="AIzaSy..." style="padding:8px 12px; background:var(--bg-surface); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); font-size:13.5px;">
+          </div>
+          
+          <div class="form-group" style="display:flex; flex-direction:column; gap:4px;">
+            <label style="font-size:12px; color:var(--text-secondary); font-weight:600;">Groq API Key (Optional)</label>
+            <input type="password" id="settings-groq-key" value="${groqKey}" placeholder="gsk_..." style="padding:8px 12px; background:var(--bg-surface); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); font-size:13.5px;">
           </div>
           
           <div class="form-group" style="display:flex; flex-direction:column; gap:4px;">
@@ -554,6 +578,11 @@ class SmartCollegeApp {
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      
+      const gKey = modal.querySelector('#settings-gemini-key').value.trim();
+      const grKey = modal.querySelector('#settings-groq-key').value.trim();
+      localStorage.setItem('smart_college_gemini_key', gKey);
+      localStorage.setItem('smart_college_groq_key', grKey);
       
       const updated = {
         user_name: modal.querySelector('#settings-username').value.trim() || "User",
@@ -758,6 +787,10 @@ class SmartCollegeApp {
       time: timeStr
     });
 
+    // Increment doubts solved count in localStorage
+    const doubtsCount = parseInt(localStorage.getItem('smart_college_doubts_solved') || '0', 10);
+    localStorage.setItem('smart_college_doubts_solved', doubtsCount + 1);
+
     this.renderActiveView(); // Renders user bubble instantly
     this.showTypingIndicator();
 
@@ -766,7 +799,9 @@ class SmartCollegeApp {
       const response = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-Gemini-Key': localStorage.getItem('smart_college_gemini_key') || '',
+          'X-Groq-Key': localStorage.getItem('smart_college_groq_key') || ''
         },
         body: JSON.stringify({
           document_id: doc.id,
@@ -957,6 +992,24 @@ class SmartCollegeApp {
       this.renderActiveView();
     } else {
       this.state.quizState.isComplete = true;
+      
+      // Save quiz score to localStorage
+      const quizLength = doc.quiz.length;
+      if (quizLength > 0) {
+        const pct = Math.round((this.state.quizState.score / quizLength) * 100);
+        let scores = [];
+        try {
+          scores = JSON.parse(localStorage.getItem('smart_college_quiz_scores'));
+          if (!Array.isArray(scores)) {
+            scores = [];
+          }
+        } catch(e) {
+          scores = [];
+        }
+        scores.push(pct);
+        localStorage.setItem('smart_college_quiz_scores', JSON.stringify(scores));
+      }
+      
       this.renderActiveView();
     }
   }

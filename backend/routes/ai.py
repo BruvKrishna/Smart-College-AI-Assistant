@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Header
 from backend.services.storage import db
 from backend.services.ai import ai_service
 from backend.schemas.responses import ApiResponse
@@ -46,7 +46,7 @@ def get_verified_document_text(document_id: str) -> dict:
     )
 
 @router.post("/chat", response_model=ApiResponse[ChatResponse])
-def chat_with_notes(req: ChatRequest):
+def chat_with_notes(req: ChatRequest, x_gemini_key: str = Header(None), x_groq_key: str = Header(None)):
     """
     Grounded question-answering matching doubts with document paragraphs.
     """
@@ -55,7 +55,13 @@ def chat_with_notes(req: ChatRequest):
     chunks = doc_record.get("chunks", [])
     
     # Generate doubt resolution response from TF-IDF retrieved chunks
-    reply = ai_service.generate_chat_answer(doc_record["name"], chunks, req.message)
+    reply = ai_service.generate_chat_answer(
+        doc_record["name"], 
+        chunks, 
+        req.message,
+        client_gemini_key=x_gemini_key,
+        client_groq_key=x_groq_key
+    )
     
     return ApiResponse(
         success=True,
