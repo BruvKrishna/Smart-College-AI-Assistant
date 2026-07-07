@@ -9,9 +9,12 @@ venv/
 ENV/
 
 # Project storage
-backend/storage/db.json
+backend/storage/*
+!backend/storage/db.json
 backend/uploads/*
 !backend/uploads/.gitkeep
+!backend/uploads/doc-e5ecff7f_Chemical_Bonding_Study_Notes.pdf
+!backend/uploads/doc-8d179ff5_renewable-energy-study-notes.pdf
 
 # Environment files
 .env
